@@ -3,6 +3,7 @@ import psycopg2
 import sys
 import pprint
 
+
 # INFO (если выставлен уровень INFO, то debug сообщения не выводятся)
 #  DEBUG
 
@@ -18,6 +19,7 @@ def main():
 
     # get a connection, if a connect cannot be made an exception will be raised here
     conn = psycopg2.connect(conn_string)
+    logging.debug("type(conn)= "+str(type(conn)))
     cur = conn.cursor()
     cur.execute("set application_name TO '"+py_pg_app_name+"'; ")
 
@@ -27,9 +29,9 @@ def main():
     pprint.pprint(records)
     '''
 
-    bv_user_id = 8599398 #615
+    bv_user_id = int(8599398) #615
     bv_input_period_id = 0
-
+    bv_report_id = 0 # достаем форму из среднего стакана.
     l_frms_status_1 = 0 #count of forms in status=1 На заполнении
 
     #==================================================================================================================
@@ -141,12 +143,18 @@ def main():
     for row in cur_res:
         row_count += 1
         logging.debug(str(row_count) + " " + str(row, ))
+        bv_report_id = int(row[0])
     cur_res.close()
+    if bv_report_id > 0:
+        logging.info("Selected report_id  : " + str(bv_report_id))
+    else:
+        logging.error("There are no forms in 1 status, exit(0)")
+        exit(0)
     logging.debug("--------------------------------------------------------------")
 
     #==================================================================================================================
     # get form data with bind variable - p_report_id
-    bv_report_id = 43944
+    # bv_report_id = 43944
     cur.execute("BEGIN; SELECT * FROM prm_salary.pkg_web_salary_form_get_data(refcur      => 'qwe', "
                                                                              "p_report_id => %(p_report_id)s, "
                                                                              "p_for_day   => '01.01.3000 05:04:21');",
