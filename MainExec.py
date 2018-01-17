@@ -6,7 +6,9 @@ import random
 def main():
     users_dict = {}
     log_dict   = {}
-    conn_string = "host='10.242.5.62' dbname='db_ris_mkrpk' user='prm_salary' password='prm_salary'"
+    conn_string = "host='10.242.5.62' dbname='db_ris_mkrpk' user='prm_salary' password='prm_salary'" #DERS
+    #conn_string = "host='46.146.228.115' dbname='db_ris_mkrpk' user='prm_salary' password='prm_salary'" #MTS
+
 
     conn_ext = psycopg2.connect(conn_string)
     cur = conn_ext.cursor()
@@ -22,7 +24,7 @@ def main():
     #return
 
     list_of_InpZp = []
-    n = 1#3
+    n = 1
 
     for i in range(1,n+1):
         list_of_InpZp.append(InputZp(i, conn_string,records,log_dict,'inst_'+str(i)))

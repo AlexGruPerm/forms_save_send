@@ -3,6 +3,7 @@ import psycopg2
 import datetime
 import threading
 import random
+import pprint
 
 class InputZp(threading.Thread):
 
@@ -21,6 +22,10 @@ class InputZp(threading.Thread):
     terr_list = []
     p_terr_list = str("")
     p_form_list = []
+    p_selected_form = 0
+    p_form_data_rows_cnt = 0
+    p_form_type = 0 # 1- ЗП, 2- П4.
+    p_valid_res = str("") # результат валидации формы.
 
     def __init__(self, threadID,conn_string:str, users_dict:list, log_dict:dict, app_db_connect_name:str):
         '''Class constructor, set some initial variables.
@@ -234,7 +239,90 @@ class InputZp(threading.Thread):
         delta = t_end - t_begin
         cur.close()
         print("FORMS CNT(",str(row_count),"):"+','.join(str(x) for x in self.p_form_list))
+        # select random one form
+
+        random_rn = random.randint(0, len(self.p_form_list) - 1)
+        self.p_selected_form = int(self.p_form_list[random_rn])
+        print("FOR TO USE NEXT [", str(self.p_selected_form), "]")
         return delta.total_seconds()
+
+    def get_form_data(self):
+        t_begin = datetime.datetime.now()
+        cur = self.conn.cursor()
+        cur.execute("BEGIN; SELECT * FROM prm_salary.pkg_web_salary_form_get_data(refcur => 'qwe', "
+                                                                                 "p_report_id => %(p_report_id)s, "
+                                                                                 "p_for_day   => '01.01.3000 05:04:21');",
+                                                                               {'p_report_id': self.p_selected_form})
+        cur_res = self.conn.cursor('qwe')
+        row_count = 0
+        for row in cur_res:
+            row_count += 1
+            #logging.debug(str(row_count) + " " + str(row, ))
+            #print(str(row, ))
+        cur_res.close()
+        self.p_form_data_rows_cnt = row_count
+        t_end = datetime.datetime.now()
+        delta = t_end - t_begin
+        cur.close()
+        print("Form data rows:"+str(self.p_form_data_rows_cnt))
+        return delta.total_seconds()
+
+    def get_button_permission(self):
+        t_begin = datetime.datetime.now()
+        cur = self.conn.cursor()
+        cur.execute("BEGIN; SELECT * FROM prm_salary.pkg_web_salary_form_get_button_permission(refcur      => 'qwe', "
+                                                                                              "p_report_id => %(p_report_id)s,"
+                                                                                              "p_user_id   => %(p_user_id)s);",
+                                                                                {'p_report_id': self.p_selected_form,
+                                                                                 'p_user_id'  : self.bv_user_id})
+        cur_res = self.conn.cursor('qwe')
+        row_count = 0
+        for row in cur_res:
+            row_count += 1
+            #logging.debug(str(row_count) + " " + str(row, ))
+            print(str(row, ))
+        cur_res.close()
+        t_end = datetime.datetime.now()
+        delta = t_end - t_begin
+        cur.close()
+        return delta.total_seconds()
+
+
+    def get_form_type(self):
+        cur = self.conn.cursor()
+        cur.execute("select inpp.sl_input_period_type_id "
+                      "from prm_salary.sl_input_period     inpp, "
+                           "prm_salary.sl_frm_inp_per_link lnk, "
+                           "prm_salary.sl_report r "
+                    "where "
+                          "lnk.sl_frm_inp_per_link_id = r.sl_frm_inp_per_link_id and "
+                          "lnk.sl_input_period_id = inpp.sl_input_period_id and r.sl_report_id = %(p_report_id)s",
+                                    {'p_report_id': self.p_selected_form})
+        records = cur.fetchall()
+        self.p_form_type = records[0][0]
+        print("FORM TYPE = ",self.p_form_type)
+        cur.close()
+
+    def push_validation_butt(self):
+        t_begin = datetime.datetime.now()
+        cur = self.conn.cursor()
+        vld_func = ""
+        if self.p_form_type==1:
+            vld_func = "pkg_web_salary_form_check_flc"
+        else:
+            vld_func = "pkg_web_p4_form_check_flc"
+
+        cur.execute("select prm_salary."+vld_func+"(p_report_id => %(p_report_id)s)",
+                                                                {'p_report_id': self.p_selected_form})
+        records = cur.fetchall()
+        self.p_valid_res = records[0][0]
+        print("VALIDATION (",vld_func,") - ",self.p_valid_res)
+        #print("FORM TYPE = ",self.p_form_type)
+        t_end = datetime.datetime.now()
+        delta = t_end - t_begin
+        cur.close()
+        return delta.total_seconds()
+
 
 
     def run(self):
@@ -255,17 +343,24 @@ class InputZp(threading.Thread):
         oiv_combo = self.get_oiv_combo()
         terr_combo = self.get_terr_combo()
         form_list = self.get_form_report_list()
+        form_data = self.get_form_data()
+        butt_permis = self.get_button_permission()
+        self.get_form_type()
+        valid_t = self.push_validation_butt()
 
         # print("--- USER_ID --- [",self.bv_user_id,"]")
 
         print("[", self.name, "] user_id = ",self.bv_user_id," login=",self.bv_user_login," openc = ", str(open_conn_sec),
                " per_list = ",str(get_periods_time),
                " frm_stat = ",str(frm_status_combo_time),
-               " close_dat = ",str(close_date_combo),
-               " okved_cmb = ",str(okved_combo_time),
-               " oiv_cmb = ",str(oiv_combo),
-               " terr_cmb = ",str(terr_combo),
-               " frm_lst = ",str(form_list)
+               " cls_dat = ",str(close_date_combo),
+               " okved_c = ",str(okved_combo_time),
+               " oiv_c = ",str(oiv_combo),
+               " ter_c = ",str(terr_combo),
+               " frm_lst = ",str(form_list),
+               " frm_dat = ",str(form_data),
+               " butt_permis =",str(butt_permis),
+               " valid = ",str(valid_t)
               )
 
         #delit
